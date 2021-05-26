@@ -53,19 +53,17 @@ int main(void)
 			 (3) if background == 0, the parent will wait, otherwise continue 
 			 (4) Shell shows a status message for processed command 
 			 (5) loop returns to get_commnad() function
-		*/
-
-		//(1) fork a child process using fork()
+		*/ 
 
 		if (!strncmp(args[0], "jobs", MAX_LINE))
 		{
 			// Hacer algo para el comando jobs
-			print_job_list(lista);
+			JOBS();
 			continue;
 		}
 
 		if (!strncmp(args[0], "cd", MAX_LINE))
-		{ // Comando cd
+		{ 
 			CD(args[1]);
 			continue;
 		}
@@ -155,10 +153,10 @@ int main(void)
 		pid_t pidShell = getpid;
 		pid_t pid_fork = fork();
 
-		if (pid fork > 0)
+		if (pid_fork > 0)
 		{
 			//padre shell
-			new process grou(pid fork); // hijo en un grupo nuevo independiente
+			new_process_group(pid_fork); // hijo en un grupo nuevo independiente
 										// hijo es el lider de su grupo gpid == pid
 			if (background)
 			{
@@ -179,8 +177,8 @@ int main(void)
 			else
 			{
 
-				// hijo padre fg
-				//ceder eñ terminal
+				// hijo  fg
+				//ceder el terminal
 				set_terminal(pid_fork);
 				waitpid(pid_fork, &status, WUNTRACED);
 				status_res = analyze_status(status, &info);
@@ -211,15 +209,36 @@ int main(void)
 		else if (pid_fork == 0)
 		{
 			//hijo
-			new process group(getpid());
-			if (background)
+			new_process_group(getpid());
+			if (background==0)
 			{
-				//poner hijo bg
+				set_terminal(pid_fork);
+				int info;
+				whilepid(fork!=waitpid(-pid_fork,&status,WUNTRACED)){
+					printf("Esperando ");
+				}
+
+				if(analyze_status(status,&info)==0){
+					job* trabajo=new_job(pid_fork,args[0],STOPPED);
+					add_job(lista,tranajo);
+					enum status estado=analyze_status(status,&info);
+
+					printf("Foregroun pid: %d, command: %s, %s, info: %d \n",pid_fork, args[0],status_string[estado],info);
+					set_terminal(getpid());
+				}
+
+
 			}
 			else
 			{
-				// hijo en fg
-				//ceder el terminal
+
+				if(background){
+					job* trabajo=new_job(pid_fork,args[0],BACKGROUND);
+				}else{
+					job* trabajo=new_job(pid_fork,args[0],FOREGROUND);
+				}
+				add_job(lista,trabajo);
+				printf("Se esta ejecutando en BACGROUND.. pid: %d, command %s", getpid(),args[0]);
 				set_terminal(getpid());
 			}
 			terminal_signals(SIG_DFL);
@@ -283,3 +302,25 @@ void mySigChild(int s)
 	}
 	return;
 }
+
+void JOBS(){
+
+}
+
+void CD(){
+
+}
+
+void FROREG(){
+
+}
+
+void BACKG(){
+
+}
+
+void CHILDREN(){
+	
+}
+
+
