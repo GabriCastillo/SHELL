@@ -157,12 +157,12 @@ int main(void)
 		if (!strncmp(args[0], "bg", MAX_LINE))
 		{
 			block_SIGCHLD();
-			if (atoi(args[1]) < 1 || atoi(args[1]) > list_size(lista))
-			{
-				printf("\nPosición no valida.\n");
-			}
-			else
-			{
+			//if (atoi(args[1]) < 1 || atoi(args[1]) > list_size(lista))
+			//{
+			//	printf("\nPosición no valida.\n");
+			//}
+			//else
+			//{
 				int pos = 1;
 				if (args[1] != NULL)
 				{
@@ -174,7 +174,7 @@ int main(void)
 					nuevo->state = BACKGROUND;
 					killpg(nuevo->pgid, SIGCONT);
 				}
-			}
+			//}
 			unblock_SIGCHLD();
 			continue;
 		}
