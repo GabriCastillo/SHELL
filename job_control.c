@@ -13,7 +13,7 @@ Some code adapted from "Fundamentos de Sistemas Operativos", Silberschatz et al.
 #include <stdlib.h>
 #include <string.h>
 #include <malloc.h>
-#include job_control.h
+#include "job_control.h"
 
 // -----------------------------------------------------------------------
 //  get_command() reads in the next command line, separating it into distinct tokens
