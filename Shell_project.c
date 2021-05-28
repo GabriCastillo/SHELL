@@ -23,6 +23,55 @@ To compile and run the program:
 //                            MAIN
 // -----------------------------------------------------------------------
 job *lista; //*tareas
+
+void manejador(int s)
+	{
+		block_SIGCHLD();
+		/*
+		MANEJADOR DE SIGCHILD ->
+	recorrer todos los jobs en bg y suspendidos a ver que les ha pasado
+	SI MUERTOS-> quitar de la lista
+	SI CAMBIAN DE ESTADO -> cambiar el job correspondiente
+		*/
+
+		int i, status, info, pid_wait;
+		enum status status_res;
+		job *jb;
+
+		for (int i = 1; i <= list_size(lista); i++)
+		{
+			jb = get_item_bypos(lista, i);
+
+			pid_wait = waitpid(jb->pgid, &status, WUNTRACED | WNOHANG | WCONTINUED);
+
+			if (pid_wait == jb->pgid)
+			{
+				status_res = analyze_status(status, &info);
+				printf("\n [SIGCHILD] Wait realizado para trabajo en background: %s, pid=%i\n", jb->command, pid_wait);
+
+				if ((status_res == SIGNALED) | (status_res == EXITED))
+				{
+					printf("\n Comando %s ejecutado en segundo plano con pid %d ha concluido", jb->command, jb->pgid);
+					delete_job(lista, jb);
+					i--;
+				}
+
+				if (status_res == CONTINUED)
+				{
+					printf("\n Comando %s con pid %d se esta ejecutando en segundo plano", jb->command, jb->pgid);
+					jb->state = BACKGROUND;
+				}
+
+				if (status_res == SUSPENDED)
+				{
+					printf("\n Comando %s ejecutado en segundo plano con pid %d ha suspendido su ejecucion", jb->command, jb->pgid);
+					jb->state = STOPPED;
+				}
+			}
+		}
+		unblock_SIGCHLD();
+		return;
+	}
 int main(void)
 {
 	char inputBuffer[MAX_LINE]; /* buffer to hold the command entered */
@@ -35,10 +84,10 @@ int main(void)
 	int info;
 	int fg = 0; /* info processed by analyze_status() */
 
-	new_list("milista");
+	lista=new_list("milista");
 	job *nuevo;				   //item
 	terminal_signals(SIG_IGN); //no muere con ^c ni se suspende con ^z
-	signal(SIGCHLD, mySigChild);
+	signal(SIGCHLD, manejador);
 
 	ignore_terminal_signals();
 	while (1) /* Program terminates normally inside get_command() after ^D is typed*/
@@ -64,7 +113,7 @@ int main(void)
 			res = chdir(args[1]);
 			if (res == -1)
 			{
-				printf("\n Error, ruta %s no encontrada", args[1];)
+				printf("\n Error, ruta %s no encontrada", args[1]);
 			}
 			continue;
 		}
@@ -97,6 +146,7 @@ int main(void)
 				}
 				pid_fork = nuevo->pgid;
 				delete_job(lista, nuevo);
+				
 			}
 			unblock_SIGCHLD();
 		}
@@ -125,12 +175,6 @@ int main(void)
 			unblock_SIGCHLD(); 
 			continue;
 		}
-
-		if (!strncmp(args[0], "children", MAX_LINE))
-		{
-			CHILDREN();
-			continue;
-		}
 		if (!fg)
 		{
 			pid_fork = fork();
@@ -144,9 +188,17 @@ int main(void)
 				set_terminal(getpid());
 
 				status_res = analyze_status(status, &info);
+				
+				if(status_res==SUSPENDED){
+				block_SIGCHLD();
+				nuevo;
+				
+				
+				
+				/*
 				if (status_res == EXITED)
 				{
-					printf("\n Comando %s ejecutado en primer plano con pid %d. Estado $s. Info: %d\n", args[0], pid_fork, status_strings[status_res], info);
+					printf("\n Comando %s ejecutado en primer plano con pid %d. Estado %s. Info: %d\n", args[0], pid_fork, status_strings[status_res], info);
 				}
 				else if (status_res == SIGNALED)
 				{
@@ -155,22 +207,26 @@ int main(void)
 				else if (status_res == SUSPENDED)
 				{
 					block_SIGCHLD();
-					nuevo = new_job(pid_fork, args[0], SUSPENDED)
-						add_job(milista, nuevo);
-					printf("\n Comando %s ejecutado en primer plano con pid %d. Estado $s. Info: %d\n", args[0], pid_fork, status_strings[status_res], info);
+					nuevo = new_job(pid_fork, args[0], SUSPENDED);
+						add_job(lista, nuevo);
+					printf("\n Comando %s ejecutado en primer plano con pid %d. Estado %s. Info: %d\n", args[0], pid_fork, status_strings[status_res], info);
 					unblock_SIGCHLD();
-				}
+				}else if(status_res=EXITED){
 				if (info != 255)
 				{
 					printf("\n Comando %s ejecutado en primer plano con pid %d. Estado finalizado. Info: %d\n", args[0], pid_fork, info);
 				}
+				
+
+				}
+				*/
+				fg = 0;
 			}
-			fg = 0;
 			else //segundo plano
 			{
 				block_SIGCHLD();
-				nuevo = new_job(pid_fork, args[0], BACKGROUND)
-					add_job(milista, nuevo);
+				nuevo = new_job(pid_fork, args[0], BACKGROUND);
+					add_job(lista, nuevo);
 				printf("\n Comando %s ejecutado en segundo plano con pid %d\n", args[0], pid_fork);
 				unblock_SIGCHLD();
 			}
@@ -180,11 +236,11 @@ int main(void)
 			new_process_group(getpid());
 			if (background == 0)
 			{
-				set_terminal(getpid();)
+				set_terminal(getpid());
 			}
 			restore_terminal_signals();
 			execvp(args[0], args);
-			printf("\n Error. Comando %s no encontrado", args[0])
+			printf("\n Error. Comando %s no encontrado", args[0]);
 				exit(-1);
 		}
 
@@ -298,59 +354,10 @@ int main(void)
 		}
 	}
 	*/
+	
 
 		// end while
 	}
+}
 
-	void mySigChild(int s)
-	{
-		block_SIGCHLD();
-		/*
-		MANEJADOR DE SIGCHILD ->
-	recorrer todos los jobs en bg y suspendidos a ver que les ha pasado
-	SI MUERTOS-> quitar de la lista
-	SI CAMBIAN DE ESTADO -> cambiar el job correspondiente
-		*/
 
-		int i, status, info, pid_wait;
-		enum status status_res;
-		job *jb;
-
-		for (int i = 1; i <= list_sise(lista); i++)
-		{
-			jb = get_item_bypos(lista, i);
-
-			pid_wait = waitpid(jb->pgid, &status, WUNTRACED | WNOHANG | WCONTINUED);
-
-			if (pid_wait == jb->pgid)
-			{
-				status_res = analyze_status(status, &info);
-				printf("\n [SIGCHILD] Wait realizado para trabajo en background: %s, pid=%i\n", jb->command, pid_wait);
-
-				if ((status_res == SIGNALED) | (status_res == EXITED))
-				{
-					printf("\n Comando %s ejecutado en segundo plano con pid %d ha concluido", jb->command, jb->pgid);
-					delete_job(lista, jb);
-					i--;
-				}
-
-				if (status_res == CONTINUED)
-				{
-					printf("\n Comando %s con pid %d se esta ejecutando en segundo plano", jb->command, jb->pgid);
-					jb->stare = BACKGROUND;
-				}
-
-				if (status_res == SUSPENDED)
-				{
-					printf("\n Comando %s ejecutado en segundo plano con pid %d ha suspendido su ejecucion", jb->command, jb->pgid);
-					jb->state = STOPPED;
-				}
-			}
-		}
-		unblock_SIGCHLD();
-		return;
-	}
-
-	void CHILDREN()
-	{
-	}
