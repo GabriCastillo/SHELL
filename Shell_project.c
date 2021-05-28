@@ -25,53 +25,57 @@ To compile and run the program:
 job *lista; //*tareas
 
 void manejador(int s)
-	{
-		block_SIGCHLD();
-		/*
+{
+	block_SIGCHLD();
+	/*
 		MANEJADOR DE SIGCHILD ->
 	recorrer todos los jobs en bg y suspendidos a ver que les ha pasado
 	SI MUERTOS-> quitar de la lista
 	SI CAMBIAN DE ESTADO -> cambiar el job correspondiente
 		*/
 
-		int i, status, info, pid_wait;
-		enum status status_res;
-		job *jb;
+	int status, info, pid_wait;
+	enum status status_res;
+	job *jb;
 
-		for (int i = 1; i <= list_size(lista); i++)
+	for (int i = 1; i <= list_size(lista); i++)
+	{
+		jb = get_item_bypos(lista, i);
+
+		pid_wait = waitpid(jb->pgid, &status, WUNTRACED | WNOHANG | WCONTINUED);
+
+		if (pid_wait == jb->pgid)
 		{
-			jb = get_item_bypos(lista, i);
+			status_res = analyze_status(status, &info);
+			//printf("\n [SIGCHILD] Wait realizado para trabajo en background: %s, pid=%i\n", jb->command, pid_wait);
 
-			pid_wait = waitpid(jb->pgid, &status, WUNTRACED | WNOHANG | WCONTINUED);
-
-			if (pid_wait == jb->pgid)
+			if ((status_res == SIGNALED) | (status_res == EXITED))
 			{
-				status_res = analyze_status(status, &info);
-				printf("\n [SIGCHILD] Wait realizado para trabajo en background: %s, pid=%i\n", jb->command, pid_wait);
-
-				if ((status_res == SIGNALED) | (status_res == EXITED))
-				{
-					printf("\n Comando %s ejecutado en segundo plano con pid %d ha concluido", jb->command, jb->pgid);
-					delete_job(lista, jb);
-					i--;
-				}
-
+				printf("\n Comando %s ejecutado en segundo plano con pid %d ha concluido", jb->command, jb->pgid);
+				delete_job(lista, jb);
+				i--;
+			}
+			else
+			{
 				if (status_res == CONTINUED)
 				{
 					printf("\n Comando %s con pid %d se esta ejecutando en segundo plano", jb->command, jb->pgid);
 					jb->state = BACKGROUND;
 				}
-
-				if (status_res == SUSPENDED)
+				else
 				{
-					printf("\n Comando %s ejecutado en segundo plano con pid %d ha suspendido su ejecucion", jb->command, jb->pgid);
-					jb->state = STOPPED;
+					if (status_res == SUSPENDED)
+					{
+						printf("\n Comando %s ejecutado en segundo plano con pid %d ha suspendido su ejecucion", jb->command, jb->pgid);
+						jb->state = STOPPED;
+					}
 				}
 			}
 		}
-		unblock_SIGCHLD();
-		return;
 	}
+	unblock_SIGCHLD();
+}
+
 int main(void)
 {
 	char inputBuffer[MAX_LINE]; /* buffer to hold the command entered */
@@ -84,7 +88,7 @@ int main(void)
 	int info;
 	int fg = 0; /* info processed by analyze_status() */
 
-	lista=new_list("milista");
+	lista = new_list("milista");
 	job *nuevo;				   //item
 	terminal_signals(SIG_IGN); //no muere con ^c ni se suspende con ^z
 	signal(SIGCHLD, manejador);
@@ -146,7 +150,6 @@ int main(void)
 				}
 				pid_fork = nuevo->pgid;
 				delete_job(lista, nuevo);
-				
 			}
 			unblock_SIGCHLD();
 		}
@@ -172,7 +175,7 @@ int main(void)
 					killpg(nuevo->pgid, SIGCONT);
 				}
 			}
-			unblock_SIGCHLD(); 
+			unblock_SIGCHLD();
 			continue;
 		}
 		if (!fg)
@@ -188,45 +191,33 @@ int main(void)
 				set_terminal(getpid());
 
 				status_res = analyze_status(status, &info);
-				
-				if(status_res==SUSPENDED){
-				block_SIGCHLD();
-				nuevo;
-				
-				
-				
-				/*
-				if (status_res == EXITED)
+
+				if (status_res == SUSPENDED)
 				{
+					block_SIGCHLD();
+					nuevo = new_job(pid_fork, args[0], STOPPED);
+					add_job(lista, nuevo);
 					printf("\n Comando %s ejecutado en primer plano con pid %d. Estado %s. Info: %d\n", args[0], pid_fork, status_strings[status_res], info);
+					unblock_SIGCHLD();
+				}
+				else if (status_res == EXITED)
+				{
+					if (info != 255)
+					{
+						printf("\n Comando %s ejecutado en primer plano con pid %d. Estado finalizado. Info: %d\n", args[0], pid_fork, info);
+					}
 				}
 				else if (status_res == SIGNALED)
 				{
 					printf("\n Comando %s ejecutado en primer plano con pid %d, termino por una señal\n", args[0], pid_fork);
 				}
-				else if (status_res == SUSPENDED)
-				{
-					block_SIGCHLD();
-					nuevo = new_job(pid_fork, args[0], SUSPENDED);
-						add_job(lista, nuevo);
-					printf("\n Comando %s ejecutado en primer plano con pid %d. Estado %s. Info: %d\n", args[0], pid_fork, status_strings[status_res], info);
-					unblock_SIGCHLD();
-				}else if(status_res=EXITED){
-				if (info != 255)
-				{
-					printf("\n Comando %s ejecutado en primer plano con pid %d. Estado finalizado. Info: %d\n", args[0], pid_fork, info);
-				}
-				
-
-				}
-				*/
 				fg = 0;
 			}
 			else //segundo plano
 			{
 				block_SIGCHLD();
 				nuevo = new_job(pid_fork, args[0], BACKGROUND);
-					add_job(lista, nuevo);
+				add_job(lista, nuevo);
 				printf("\n Comando %s ejecutado en segundo plano con pid %d\n", args[0], pid_fork);
 				unblock_SIGCHLD();
 			}
@@ -241,123 +232,8 @@ int main(void)
 			restore_terminal_signals();
 			execvp(args[0], args);
 			printf("\n Error. Comando %s no encontrado", args[0]);
-				exit(-1);
+			exit(-1);
 		}
-
-		/*
-		// Externos
-		pid_t pidShell = getpid;
-		pid_t pid_fork = fork();
-
-		if (pid_fork > 0)
-		{
-			//padre shell
-			new_process_group(pid_fork); // hijo en un grupo nuevo independiente
-										 // hijo es el lider de su grupo gpid == pid
-			if (background)
-			{
-				//poner hijo bg
-				printf("background\n");
-				//meter en lista
-
-				//nuevo nodo job -> nuevo job BACKGROUND
-				nuevo = new_job(pid_fork, inputBuffer, BACKGROUND)
-
-					// Meterlo en la lista
-					// Sección crítica libre de SIGCHLD
-
-					block_SIGCHLD();
-				add_job(lista, nuevo);
-				unblock_SIGCHLD();
-			}
-			else
-			{
-
-				// hijo  fg
-				//ceder el terminal
-				set_terminal(pid_fork);
-				waitpid(pid_fork, &status, WUNTRACED);
-				status_res = analyze_status(status, &info);
-
-				if (status_res == EXITED)
-				{
-					printf("El hijo en fg acabo normalmente y retorno %d\n", info);
-				}
-				else if (status_res == SIGNALED)
-				{
-					printf("El hijo en fg acabo por una seña\n");
-				}
-				else if (status_res == SUSPENDED)
-				{
-					printf("El hijo en fg se suspendio\n");
-				}
-
-				if (status_res == SUSPENDED)
-				{
-					nuevo = new_job(pid_fork, inputBuffer, STOPPED);
-					block_SIGCHLD();
-					add_job(lista, nuevo);
-					unblock_SIGCHLD();
-				}
-				set_terminal(getpid());
-			}
-		}
-		else if (pid_fork == 0)
-		{
-
-			//hijo
-			new_process_group(getpid());
-			if (background == 0)
-			{
-				set_terminal(pid_fork);
-				int info;
-				whilepid(fork != waitpid(-pid_fork, &status, WUNTRACED))
-				{
-					printf("Esperando ");
-				}
-
-				if (analyze_status(status, &info) == 0)
-				{
-					job *trabajo = new_job(pid_fork, args[0], STOPPED);
-					add_job(lista, tranajo);
-					enum status estado = analyze_status(status, &info);
-
-					printf("Foregroun pid: %d, command: %s, %s, info: %d \n", pid_fork, args[0], status_string[estado], info);
-					set_terminal(getpid());
-				}
-			}
-			else
-			{
-
-				if (background)
-				{
-					job *trabajo = new_job(pid_fork, args[0], BACKGROUND);
-				}
-				else
-				{
-					job *trabajo = new_job(pid_fork, args[0], FOREGROUND);
-				}
-				add_job(lista, trabajo);
-				printf("Se esta ejecutando en BACGROUND.. pid: %d, command %s", getpid(), args[0]);
-				set_terminal(getpid());
-			}
-			terminal_signals(SIG_DFL);
-			execvp(args[0], args);
-
-			perror("Si llega aquí hubo un error en exec");
-			exit(EXIT_FAILURE);
-		}
-		else
-		{
-			//errror
-			perror("Error en fork ...\n");
-		}
-	}
-	*/
-	
-
 		// end while
 	}
 }
-
-
