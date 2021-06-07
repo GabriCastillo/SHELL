@@ -1,8 +1,6 @@
 /**
 UNIX Shell Project
-
 https://github.com/GabriCastillo/SHELL.git
-
 Sistemas Operativos
 Grados I. Informatica, Computadores & Software
 Dept. Arquitectura de Computadores - UMA
@@ -121,7 +119,7 @@ int main(void)
 		}
 		else
 		{
-			strcpy(historial[puntero_historia], args[0]);
+			strcpy(historial[puntero_historial], args[0]);
 			continue;
 		}
 
@@ -247,11 +245,11 @@ int main(void)
 		}else if (!strncmp(args[0], "history", MAX_LINE))
 		{
 			printf("\n");
-			for (int k = 0; k < puntero_historia; k++)
+			for (int k = 0; k < puntero_historial; k++)
 			{
-				printf(historial[k]"\n");
+				printf(historial[k],"\n");
 			}
-			
+			continue;
 		}
 		/////////////////////////////////////////////////////////////////////
 
