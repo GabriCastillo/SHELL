@@ -24,34 +24,47 @@ To compile and run the program:
 // -----------------------------------------------------------------------
 job *lista; //*tareas
 
-void manejador(int s)
+void mysigchild(int s)
 {
+	printf("Se recibió SIGCHLD\n"); // NO SE ACONSEJA usar printf en una señal
 
-	/*
-		MANEJADOR DE SIGCHILD ->
-	recorrer todos los jobs en bg y suspendidos a ver que les ha pasado
-	SI MUERTOS-> quitar de la lista
-	SI CAMBIAN DE ESTADO -> cambiar el job correspondiente
-		*/
+	// MANEJADOR DE SIGCHLD ->
+	//   recorrer todos los jobs en bg y suspendidos a ver
+	//   qué les ha pasado???:
+	//     SI MUERTOS-> quitar de la lista
+	//     SI CAMBIAN DE ESTADO -> cambiar el job correspondiente
 
 	int i, status, info, pid_wait;
-	enum status status_res;
+	enum status status_res; /* status processed by analyze_status() */
 	job *jb;
 
-	for (int i = list_size(lista); i >= 1; i--)
+	for (int i = 1; i <= list_size(lista); i++)
 	{
 		jb = get_item_bypos(lista, i);
-		pid_wait = waitpid(jb->pgid, &status, WUNTRACED | WNOHANG | WCONTINUED);
+
+		pid_wait = waitpid(jb->pgid, &status,
+						   WUNTRACED | WNOHANG | WCONTINUED);
 
 		if (pid_wait == jb->pgid)
 		{
 			status_res = analyze_status(status, &info);
+			// qué puede ocurrir?
+			// - EXITED
+			// - SIGNALED
+			// - SUSPENDED
+			// - CONTINUED
 
 			printf("[SIGCHLD] Wait realizado para trabajo en background: %s, pid=%i\n", jb->command, pid_wait);
+			/* Actuar según los posibles casos reportados por status
+                Al menos hay que considerar EXITED, SIGNALED, y SUSPENDED
+                En este ejemplo sólo se consideran los dos primeros */
 
 			if ((status_res == SIGNALED) | (status_res == EXITED))
 			{
 				delete_job(lista, jb);
+
+				// [1]->[2]->[3]....
+
 				i--; /* Ojo! El siguiente ha ocupado la posicion de este en la lista */
 			}
 
@@ -68,6 +81,7 @@ void manejador(int s)
 			print_job_list(lista); //debugging
 		}
 	}
+
 	return;
 }
 
@@ -76,17 +90,22 @@ int main(void)
 	char inputBuffer[MAX_LINE]; /* buffer to hold the command entered */
 	int background;				/* equals 1 if a command is followed by '&' */
 	char *args[MAX_LINE / 2];	/* command line (of 256) has max of 128 arguments */
+
 	// probably useful variables:
 	int pid_fork, pid_wait; /* pid for created and waited process */
 	int status;				/* status returned by wait */
 	enum status status_res; /* status processed by analyze_status() */
 	int info;				/* info processed by analyze_status() */
-
-	terminal_signals(SIG_IGN); //no muere con ^c ni se suspende con ^z
+	int fg = 0;
+	int puntero_historial = 0;
 	lista = new_list("milista");
-	job *nuevo; //item
+	char historial[MAX_LINE][MAX_LINE];
 
-	signal(SIGCHLD, manejador);
+		job *nuevo; // para meter un nuevo trabajo en la lista
+
+	terminal_signals(SIG_IGN); // Ya no se muere con ^C ni se suspende con ^Z
+
+	signal(SIGCHLD, mysigchild);
 
 	while (1) /* Program terminates normally inside get_command() after ^D is typed*/
 	{
@@ -95,7 +114,14 @@ int main(void)
 		get_command(inputBuffer, MAX_LINE, args, &background); /* get next command */
 
 		if (args[0] == NULL)
+		{
 			continue; // if empty command
+		}
+		else
+		{
+			strcpy(historial[puntero_historia], args[0]);
+			continue;
+		}
 
 		/* the steps are:
 			 (1) fork a child process using fork()
@@ -104,7 +130,7 @@ int main(void)
 			 (4) Shell shows a status message for processed command 
 			 (5) loop returns to get_commnad() function
 		*/
-
+		////////////////////////////////////////////////////////////////
 		if (!strncmp(args[0], "cd", MAX_LINE))
 		{
 			if (args[1] != NULL)
@@ -122,6 +148,7 @@ int main(void)
 		}
 		else if (!strncmp(args[0], "jobs", MAX_LINE))
 		{
+			block_SIGCHLD();
 			if (list_size(lista) > 0)
 			{
 				print_job_list(lista);
@@ -130,11 +157,13 @@ int main(void)
 			{
 				printf("La lista esta vacia");
 			}
+			unblock_SIGCHLD();
 			continue;
 		}
 		else if (!strncmp(args[0], "fg", MAX_LINE))
 		{
 
+			block_SIGCHLD();
 			job *jl;
 
 			if (args[1] == NULL)
@@ -155,7 +184,7 @@ int main(void)
 				if (jl->state != FOREGROUND)
 				{							//si no estaba en fg
 					jl->state = FOREGROUND; //lo ponemos en fg
-					set_terminal(jl->pgid);	//cedemos la terminal
+					set_terminal(jl->pgid); //cedemos la terminal
 
 					killpg(jl->pgid, SIGCONT); //envia señal al grupo de procesos para que sigan
 					waitpid(jl->pgid, &status, WUNTRACED);
@@ -168,7 +197,7 @@ int main(void)
 					}
 					else
 					{
-						delete_job(lista, j);
+						delete_job(lista, jl);
 					}
 
 					printf("Foreground pid: %d, command: %s, %s, info:%d\n", pid_fork, args[0], status_strings[status_res], info);
@@ -179,6 +208,7 @@ int main(void)
 					printf("El proceso '%s' (pid: %i) no estaba suspendido ni en background", jl->command, jl->pgid);
 				}
 			}
+			unblock_SIGCHLD();
 			continue;
 		}
 		else if (!strncmp(args[0], "bg", MAX_LINE))
@@ -212,74 +242,119 @@ int main(void)
 			}
 			unblock_SIGCHLD();
 			continue;
+		}else if (!strncmp(args[0], "history", MAX_LINE))
+		{
+			printf("\n");
+			for (int k = 0; k < puntero_historia; k++)
+			{
+				printf(historial[k]"\n");
+			}
+			
 		}
-			pid_fork = fork();
+		/////////////////////////////////////////////////////////////////////
+
+		pid_fork = fork();
 
 		if (pid_fork > 0)
 		{
-			new_process_group(pid_fork);
+			// PADRE (shell)
+
+			new_process_group(pid_fork); // hijo en un grupo nuevo independiente
+										 // hijo es el lider de su grupo gpid == pid
 
 			if (background)
-			{ //poner el hijo en bg
-				//Nuevo nodo job -> nuevo job BG
-				nuevo = new_job(pid_fork, inputBuffer, BACKGROUND);
+			{
+				// poner el hijo en bg
+				printf("background\n");
+
+				// meter en lista
+
+				// Nuevo nodo job -> nuevo job BACKGROUND
+				nuevo = new_job(pid_fork,
+								inputBuffer,
+								BACKGROUND); //Nuevo nodo job
+
 				// Meterlo en la lista
 				// Sección crítica libre de SIGCHLD
 				block_SIGCHLD(); // mask -> la señal si entra se queda pendiente
 				add_job(lista, nuevo);
 				unblock_SIGCHLD(); // unmask -> entran sigchild pendientes
-				printf("Background job running, pid: %d, command: %s\n", pid_fork, args[0]);
 			}
 			else
-			{ //poner el hijo en fg
+			{
+				// poner el hijo en fg
 
-				status_res = analyze_status(status, &info);
-				printf("Foreground pid: %d, command: %s, %s, info: %d\n", pid_fork, args[0], status_strings[status_res], info);
-				fflush(stdout);
-				set_terminal(pid_fork); //Ceder el terminal al hijo. OJO! se cede a un grupo
+				// ceder el terminal al hijo
+				set_terminal(pid_fork);
+
+				// el shell se tiene que quedar esperando:
+				// - terminación (exit/signal)
+				// - suspensión ^Z
+				// wait?? -> bloqueante
 				waitpid(pid_fork, &status, WUNTRACED);
 
-				set_terminal(getpid());
+				// cuando se "sale" del wait?
+				// EXITED -> el hijo acaba normalmente
+				// SIGNALED -> muere por culpa de una señal
+				// SUSPENDED -> se suspende (^Z, o kill -STOP ...)
 				status_res = analyze_status(status, &info);
 				if (status_res == EXITED)
 				{
-					printf("El hijo en fg acabó normalmente\n");
+					printf("El hijo en fg acabó normalmente y retornó %d\n", info);
 				}
 				else if (status_res == SIGNALED)
 				{
 					printf("El hijo en fg acabó por una señal\n");
 				}
-				else
-				{ // status_res == SUSPENDED
+				else if (status_res == SUSPENDED)
+				{
 					printf("El hijo en fg se suspendió\n");
 				}
 
+				// meter en lista SI suspendido
 				if (status_res == SUSPENDED)
 				{
-					nuevo = new_job(pid_fork, inputBuffer, STOPPED);
+					nuevo = new_job(pid_fork,
+									inputBuffer,
+									STOPPED);
 					block_SIGCHLD();
 					add_job(lista, nuevo);
 					unblock_SIGCHLD();
 				}
+
+				// el shell recupera el terminal
+				set_terminal(getpid());
 			}
 		}
 		else if (pid_fork == 0)
-		{								 //lo ejecuta el hijo
-			new_process_group(getpid()); //HIJO -> grupo propio
+		{
+			// HIJO
 
-			if (!background)
+			new_process_group(getpid()); // hijo en un grupo nuevo independiente
+
+			if (background)
 			{
+				// hijo en bg
+			}
+			else
+			{
+				// hijo en fg
+				// ceder el terminal al hijo
 				set_terminal(getpid());
 			}
 
-			terminal_signals(SIG_DFL); // activamos de nuevo ^C y ^Z
-			execvp(args[0], args);
-			printf("Error, command not found: %s\n", inputBuffer);
+			terminal_signals(SIG_DFL); // por defecto ^C, ^Z ...
+
+			execvp(args[0], args); // args[0]="xclock";
+
+			// Error en exec?
+			perror("Si llega aquí hubo un error en exec");
 			exit(EXIT_FAILURE);
 		}
 		else
 		{
-			perror("Error\n");
+			// Error en fork()
+			perror("Error en fork ....");
 		} // end while
 	}
 }
