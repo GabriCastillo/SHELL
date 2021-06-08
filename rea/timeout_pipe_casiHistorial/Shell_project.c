@@ -38,7 +38,7 @@ To compile and run the program:
 //                            MANEJADOR
 // -----------------------------------------------------------------------
 job *lista; //*tareas
-job *hits;
+job *hist;
 
 void mysigchild(int s) {
     printf("\nSe recibió SIGCHLD\n"); // NO SE ACONSEJA usar printf en una señal
