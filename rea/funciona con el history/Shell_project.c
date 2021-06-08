@@ -26,7 +26,7 @@ job *lista; //*tareas
 
 void mysigchild(int s)
 {
-	printf("Se recibió SIGCHLD\n"); // NO SE ACONSEJA usar printf en una señal
+	printf("\nSe recibió SIGCHLD\n"); // NO SE ACONSEJA usar printf en una señal
 
 	// MANEJADOR DE SIGCHLD ->
 	//   recorrer todos los jobs en bg y suspendidos a ver
@@ -54,7 +54,7 @@ void mysigchild(int s)
 			// - SUSPENDED
 			// - CONTINUED
 
-			printf("[SIGCHLD] Wait realizado para trabajo en background: %s, pid=%i\n", jb->command, pid_wait);
+			printf("\n[SIGCHLD] Wait realizado para trabajo en background: %s, pid=%i\n", jb->command, pid_wait);
 			/* Actuar según los posibles casos reportados por status
                 Al menos hay que considerar EXITED, SIGNALED, y SUSPENDED
                 En este ejemplo sólo se consideran los dos primeros */
@@ -136,7 +136,7 @@ int main(void)
 			{
 				if (chdir(args[1]) == -1)
 				{
-					printf("ERROR. No existe el directorio %s\n", args[1]);
+					printf("\nERROR. No existe el directorio %s\n", args[1]);
 				}
 			}
 			else
@@ -154,7 +154,7 @@ int main(void)
 			}
 			else
 			{
-				printf("La lista esta vacia");
+				printf("\nLa lista esta vacia\n");
 			}
 			unblock_SIGCHLD();
 			continue;
@@ -176,7 +176,7 @@ int main(void)
 
 			if (jl == NULL)
 			{
-				printf("ERROR. No se encuentra en la lista\n");
+				printf("\nERROR. No se encuentra en la lista\n");
 			}
 			else
 			{
@@ -199,12 +199,12 @@ int main(void)
 						delete_job(lista, jl);
 					}
 
-					printf("Foreground pid: %d, command: %s, %s, info:%d\n", pid_fork, args[0], status_strings[status_res], info);
+					printf("\nForeground pid: %d, command: %s, %s, info:%d\n", pid_fork, args[0], status_strings[status_res], info);
 				}
 				else
 				{
 
-					printf("El proceso '%s' (pid: %i) no estaba suspendido ni en background", jl->command, jl->pgid);
+					printf("\nEl proceso '%s' (pid: %i) no estaba suspendido ni en background\n", jl->command, jl->pgid);
 				}
 			}
 			unblock_SIGCHLD();
@@ -230,13 +230,13 @@ int main(void)
 
 			if (jl == NULL)
 			{
-				printf("ERROR. No se encuentra en la lista\n");
+				printf("\nERROR. No se encuentra en la lista\n");
 			}
 			else
 			{
 
 				jl->state = BACKGROUND;
-				printf("Background pid: %id, command: %s\n", jl->pgid, jl->command);
+				printf("\nBackground pid: %id, command: %s\n", jl->pgid, jl->command);
 				killpg(jl->pgid, SIGCONT);
 			}
 			unblock_SIGCHLD();
@@ -265,7 +265,7 @@ int main(void)
 			if (background)
 			{
 				// poner el hijo en bg
-				printf("background\n");
+				printf("\nbackground\n");
 
 				// meter en lista
 
@@ -300,15 +300,15 @@ int main(void)
 				status_res = analyze_status(status, &info);
 				if (status_res == EXITED)
 				{
-					printf("El hijo en fg acabó normalmente y retornó %d\n", info);
+					printf("\nEl hijo en fg acabó normalmente y retornó %d\n", info);
 				}
 				else if (status_res == SIGNALED)
 				{
-					printf("El hijo en fg acabó por una señal\n");
+					printf("\nEl hijo en fg acabó por una señal\n");
 				}
 				else if (status_res == SUSPENDED)
 				{
-					printf("El hijo en fg se suspendió\n");
+					printf("\nEl hijo en fg se suspendió\n");
 				}
 
 				// meter en lista SI suspendido
@@ -348,13 +348,13 @@ int main(void)
 			execvp(args[0], args); // args[0]="xclock";
 
 			// Error en exec?
-			perror("Si llega aquí hubo un error en exec");
+			perror("\nSi llega aquí hubo un error en exec\n");
 			exit(EXIT_FAILURE);
 		}
 		else
 		{
 			// Error en fork()
-			perror("Error en fork ....");
+			perror("\nError en fork ....\n");
 		} // end while
 	}
 }
