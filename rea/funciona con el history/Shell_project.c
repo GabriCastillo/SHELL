@@ -19,6 +19,18 @@ To compile and run the program:
 #define MAX_LINE 256 /* 256 chars per line, per command, should be enough. */
 #include <string.h>
 
+//colores
+
+#define ROJO "\x1b[31;1;1m"
+#define NEGRO "\x1b[0m"
+#define VERDE "\x1b[32;1;1m"
+#define AZUL "\x1b[34;1;1m"
+#define CIAN "\x1b[36;1;1m"
+#define MARRON "\x1b[33;1;1m"
+#define PURPURA "\x1b[35;1;1m"
+
+//colores
+
 // -----------------------------------------------------------------------
 //                            MAIN
 // -----------------------------------------------------------------------
@@ -42,8 +54,7 @@ void mysigchild(int s)
 	{
 		jb = get_item_bypos(lista, i);
 
-		pid_wait = waitpid(jb->pgid, &status,
-						   WUNTRACED | WNOHANG | WCONTINUED);
+		pid_wait = waitpid(jb->pgid, &status, WUNTRACED | WNOHANG | WCONTINUED);
 
 		if (pid_wait == jb->pgid)
 		{
@@ -87,6 +98,7 @@ void mysigchild(int s)
 
 int main(void)
 {
+	printf(ROJO "Demostración %sde %scolor" NEGRO, VERDE, AZUL);
 	char inputBuffer[MAX_LINE]; /* buffer to hold the command entered */
 	int background;				/* equals 1 if a command is followed by '&' */
 	char *args[MAX_LINE / 2];	/* command line (of 256) has max of 128 arguments */
@@ -96,13 +108,15 @@ int main(void)
 	int status;				/* status returned by wait */
 	enum status status_res; /* status processed by analyze_status() */
 	int info;				/* info processed by analyze_status() */
+	lista = new_list("milista");
+
 	int fg = 0;
 	int puntero_historial = 0;
 	char historial[MAX_LINE][MAX_LINE];
-	lista = new_list("milista");
+	int time, timeout;
 	
 
-		job *nuevo; // para meter un nuevo trabajo en la lista
+	job *nuevo; // para meter un nuevo trabajo en la lista
 
 	terminal_signals(SIG_IGN); // Ya no se muere con ^C ni se suspende con ^Z
 
@@ -116,11 +130,9 @@ int main(void)
 
 		if (args[0] == NULL)
 			continue; // if empty command
-		
-		
-			strcpy(historial[puntero_historial], args[0]);
-			puntero_historial++;
-		
+
+		strcpy(historial[puntero_historial], args[0]);
+		puntero_historial++;
 
 		/* the steps are:
 			 (1) fork a child process using fork()
@@ -164,47 +176,54 @@ int main(void)
 
 			block_SIGCHLD();
 			job *jl;
-
-			if (args[1] == NULL)
+			if (empty_list(my_job_list))
 			{
-				jl = get_item_bypos(lista, 1);
+				printf("No se encuentra ningún proceso en ejecución\n");
 			}
 			else
 			{
-				jl = get_item_bypos(lista, atoi(args[1]));
-			}
 
-			if (jl == NULL)
-			{
-				printf("\nERROR. No se encuentra en la lista\n");
-			}
-			else
-			{
-				if (jl->state != FOREGROUND)
-				{							//si no estaba en fg
-					jl->state = FOREGROUND; //lo ponemos en fg
-					set_terminal(jl->pgid); //cedemos la terminal
-
-					killpg(jl->pgid, SIGCONT); //envia señal al grupo de procesos para que sigan
-					waitpid(jl->pgid, &status, WUNTRACED);
-
-					set_terminal(getpid()); //devolvemos terminal
-					status_res = analyze_status(status, &info);
-					if (status_res == SUSPENDED)
-					{
-						jl->state = STOPPED;
-					}
-					else
-					{
-						delete_job(lista, jl);
-					}
-
-					printf("\nForeground pid: %d, command: %s, %s, info:%d\n", pid_fork, args[0], status_strings[status_res], info);
+				if (args[1] == NULL)
+				{
+					jl = get_item_bypos(lista, 1);
 				}
 				else
 				{
+					jl = get_item_bypos(lista, atoi(args[1]));
+				}
 
-					printf("\nEl proceso '%s' (pid: %i) no estaba suspendido ni en background\n", jl->command, jl->pgid);
+				if (jl == NULL)
+				{
+					printf("\nERROR. No se encuentra en la lista\n");
+				}
+				else
+				{
+					if (jl->state != FOREGROUND)
+					{							//si no estaba en fg
+						jl->state = FOREGROUND; //lo ponemos en fg
+						set_terminal(jl->pgid); //cedemos la terminal
+
+						killpg(jl->pgid, SIGCONT); //envia señal al grupo de procesos para que sigan
+						waitpid(jl->pgid, &status, WUNTRACED);
+
+						set_terminal(getpid()); //devolvemos terminal
+						status_res = analyze_status(status, &info);
+						if (status_res == SUSPENDED)
+						{
+							jl->state = STOPPED;
+						}
+						else
+						{
+							delete_job(lista, jl);
+						}
+
+						printf("\nForeground pid: %d, command: %s, %s, info:%d\n", pid_fork, args[0], status_strings[status_res], info);
+					}
+					else
+					{
+
+						printf("\nEl proceso '%s' (pid: %i) no estaba suspendido ni en background\n", jl->command, jl->pgid);
+					}
 				}
 			}
 			unblock_SIGCHLD();
@@ -215,41 +234,63 @@ int main(void)
 
 			job *jl;
 			int id;
-
-			if (args[1] == NULL)
+			if (empty_list(my_job_list))
 			{
-				id = 1;
+				printf("No se encuentra ningún proceso en ejecución\n");
 			}
 			else
 			{
-				id = atoi(args[1]);
-			}
+				if (args[1] == NULL)
+				{
+					id = 1;
+				}
+				else
+				{
+					id = atoi(args[1]);
+				}
 
-			block_SIGCHLD();
-			jl = get_item_bypos(lista, id);
+				block_SIGCHLD();
+				jl = get_item_bypos(lista, id);
 
-			if (jl == NULL)
-			{
-				printf("\nERROR. No se encuentra en la lista\n");
-			}
-			else
-			{
+				if (jl == NULL)
+				{
+					printf("\nERROR. No se encuentra en la lista\n");
+				}
+				else
+				{
 
-				jl->state = BACKGROUND;
-				printf("\nBackground pid: %id, command: %s\n", jl->pgid, jl->command);
-				killpg(jl->pgid, SIGCONT);
+					jl->state = BACKGROUND;
+					printf("\nBackground pid: %id, command: %s\n", jl->pgid, jl->command);
+					killpg(jl->pgid, SIGCONT);
+				}
 			}
 			unblock_SIGCHLD();
 			continue;
-		}else if (!strncmp(args[0], "history", MAX_LINE))
+		}
+		else if (!strncmp(args[0], "history", MAX_LINE))
 		{
-			
+
 			for (int k = 0; k < puntero_historial; k++)
 			{
 				printf("\n");
-				printf(historial[k],"\n");
+				printf(historial[k], "\n");
 			}
 			continue;
+		}else if(strcmp(args[0],"time-out",MAX_LINE)){
+			if(args[1]!=null &&args[2]!=NULL){
+				time=atoi(args[1]);
+				timeout=1;
+				int p=0;
+				while(args[p]!=NULL){
+					args[p]=args[p+2];
+					p++;
+				}
+				args[p-2]=NULL;
+				pid_fork=fork;
+			}else{
+				printef("\nMuchos argumentos\n");
+				continue;
+			}
 		}
 		/////////////////////////////////////////////////////////////////////
 
