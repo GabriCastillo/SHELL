@@ -19,6 +19,33 @@ To compile and run the program:
 #define MAX_LINE 256 /* 256 chars per line, per command, should be enough. */
 #include <string.h>
 
+//timeout
+
+#include <stdlib.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <signal.h>
+#include <time.h>
+#include <errno.h>
+
+#define errExit(msg)        \
+	do                      \
+	{                       \
+		perror(msg);        \
+		exit(EXIT_FAILURE); \
+	} while (0)
+
+typedef struct
+{
+	pid_t pgid;
+	// estruturas de datos adicionales para manejar el temporizador
+	timer_t timerid;	   // para poder destruirlo cuando no haga falta
+	struct itimerspec its; // especificacion de tiempos del temporizador
+	struct sigevent sev;   // el evento que envia el temporizador
+} elem;					   // o bien, poner el puntero al timer en la lista de procesos
+
+//timeout
+
 //colores
 
 #define ROJO "\x1b[31;1;1m"
@@ -35,6 +62,18 @@ To compile and run the program:
 //                            MAIN
 // -----------------------------------------------------------------------
 job *lista; //*tareas
+
+static void handler(int sig, siginfo_t *si, void *uc)
+{
+	elem *payload;
+
+	payload = si->si_value.sival_ptr;
+
+	killpg(payload->pgid, SIGTERM); // envio TERM al grupo timed-out-ed!
+	timer_delete(payload->timerid); // destruyo el temporizador
+
+	free(payload); // si es un elemento de la lista de procesos, no se elimina todavia!!!
+}
 
 void mysigchild(int s)
 {
@@ -114,7 +153,9 @@ int main(void)
 	int puntero_historial = 0;
 	char historial[MAX_LINE][MAX_LINE];
 	int time, timeout;
-	
+	//////////////////////////////////////////////////////////////////////
+
+	//////////////////////////////////////////////////////////////////////
 
 	job *nuevo; // para meter un nuevo trabajo en la lista
 
@@ -276,20 +317,57 @@ int main(void)
 				printf(historial[k], "\n");
 			}
 			continue;
-		}else if(strcmp(args[0],"time-out",MAX_LINE)){
-			if(args[1]!=null &&args[2]!=NULL){
-				time=atoi(args[1]);
-				timeout=1;
-				int p=0;
-				while(args[p]!=NULL){
-					args[p]=args[p+2];
-					p++;
-				}
-				args[p-2]=NULL;
-				pid_fork=fork;
-			}else{
-				printef("\nMuchos argumentos\n");
-				continue;
+		}
+		else if (strcmp(args[0], "time-out", MAX_LINE))
+		{
+			struct sigaction sa; // la accion que realiza el receptor
+			elem *theOne;		 // usa esto o el elemento de la lista de procesos
+			int pgid;
+			int when;
+			int read;
+
+			// Establecer el manejador de SIGNAL SIGRTMIN
+			printf("Estableciendo el handler de SIGNAL %d\n", SIGRTMIN);
+			sa.sa_flags = SA_SIGINFO;
+			sa.sa_sigaction = handler;
+			sigemptyset(&sa.sa_mask);
+			if (sigaction(SIGRTMIN, &sa, NULL) == -1)
+				errExit("sigaction");
+
+			pid_fork = fork();
+			new_process_group(pid_fork);
+			nuevo = new_job(pid_fork, inputBuffer, BACKGROUND); //Nuevo nodo job
+
+			// Meterlo en la lista
+			// Sección crítica libre de SIGCHLD
+			block_SIGCHLD(); // mask -> la señal si entra se queda pendiente
+			add_job(lista, nuevo);
+			unblock_SIGCHLD();
+
+			if (args[1] != NULL && args[2] != NULL)
+			{
+				pgid = nuevo->pgid;
+				when = args[1];
+
+				// Incluir info del temporizador en la estructura de tipo elem
+				theOne = (elem *)malloc(sizeof(elem));
+				theOne->pgid = pgid; // a quien vamos a matar
+									 // theOne->timerid todavia no lo conocemos, lo escribe timer_create()
+
+				// Crear el timer
+				theOne->sev.sigev_notify = SIGEV_SIGNAL;
+				theOne->sev.sigev_signo = SIGRTMIN;
+				theOne->sev.sigev_value.sival_ptr = (void *)theOne; // it points to me!
+				if (timer_create(CLOCK_REALTIME, &theOne->sev, &theOne->timerid) == -1)
+					errExit("timer_create");
+
+				// Arranca el timer
+				theOne->its.it_value.tv_sec = when;
+				theOne->its.it_value.tv_nsec = 0;
+				theOne->its.it_interval.tv_sec = theOne->its.it_value.tv_sec;
+				theOne->its.it_interval.tv_nsec = theOne->its.it_value.tv_nsec;
+				if (timer_settime(theOne->timerid, 0, &theOne->its, NULL) == -1)
+					errExit("timer_settime");
 			}
 		}
 		/////////////////////////////////////////////////////////////////////
@@ -311,9 +389,7 @@ int main(void)
 				// meter en lista
 
 				// Nuevo nodo job -> nuevo job BACKGROUND
-				nuevo = new_job(pid_fork,
-								inputBuffer,
-								BACKGROUND); //Nuevo nodo job
+				nuevo = new_job(pid_fork, inputBuffer, BACKGROUND); //Nuevo nodo job
 
 				// Meterlo en la lista
 				// Sección crítica libre de SIGCHLD
