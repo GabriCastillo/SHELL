@@ -304,7 +304,7 @@ int main(void) {
                 } else {
                     strcpy(args[0], copy->command);
                     args[1] = NULL;
-                    printf(:"[%d] %s\n",pos,copy->command);
+                    printf(":[%d] %s\n",pos,copy->command);
                 }
             }else{
                 while (aux->next != NULL) {//bucle para recorrer el historial
@@ -382,28 +382,28 @@ int main(void) {
                 add_job(lista, nuevo);
 
                 unblock_SIGCHLD(); // unmask -> entran sigchild pendientes
-                printf("\nBackground job running, pid: %d, command: %s\n", pid_fork, args[0]);
+             //   printf("\nBackground job running, pid: %d, command: %s\n", pid_fork, args[0]);
 
 
             } else {
                 // poner el hijo en fg
                 add_job(hist, new_job(getpid(), args[0], FOREGROUND));
 
-                printf("Foreground pid: %d, command: %s, %s, info: %d\n", pid_fork, args[0],status_strings[status_res], info);
-                fflush(stdout);
+              //  printf("Foreground pid: %d, command: %s, %s, info: %d\n", pid_fork, args[0],status_strings[status_res], info);
+             //   fflush(stdout);
                 set_terminal(pid_fork);// ceder el terminal al hijo
 
-                // el shell se tiene que quedar esperando:
+                // el shell se tiene que quedar esperando:s
                 // - terminación (exit/signal)
                 // - suspensión ^Z
                 // wait?? -> bloqueante
                 pid_wait = waitpid(pid_fork, &status, WUNTRACED);
-
+//aaa
                 // cuando se "sale" del wait?
                 // EXITED -> el hijo acaba normalmente
                 // SIGNALED -> muere por culpa de una señal
                 // SUSPENDED -> se suspende (^Z, o kill -STOP ...)
-                set_terminal(getpid());
+               // set_terminal(getpid());
                 status_res = analyze_status(status, &info);
                 if (status_res == EXITED) {
                     printf("\nEl hijo en fg acabó normalmente y retornó %d\n", info);
@@ -415,7 +415,9 @@ int main(void) {
 
                 // meter en lista SI suspendido
                 if (status_res == SUSPENDED) {
-                    nuevo = new_job(pid_fork,inputBuffer,STOPPED);
+                    nuevo = new_job(pid_fork,
+                                    inputBuffer,
+                                    STOPPED);
                     block_SIGCHLD();
                     add_job(lista, nuevo);
                     unblock_SIGCHLD();
