@@ -1,0 +1,29 @@
+Timeout
+=======
+
+Incluye varios codigos de ejemplo para terminar un proceso tras un tiempo dado.
+Los ejemplos piden por teclado el identificador del proceso al que se le envia
+la signal 15 (SIGTERM) y el numero de segundos a esperar antes del envio.
+Hay tres versiones:
+(1) timeout_timer_signal
+(2) timeout_timer_thread
+(3) timeout_pthread_sleep
+
+El codigo 1 arma un temporizador por cada peticion que le llega por teclado.
+Este, al vencimiento, enviara un signal de tiempo real (al propio proceso) con
+un puntero a una estructura que contiene el pid del proceso a terminar e
+informacion sobre el temporizador que ha vencido.
+El manejador (handler) asociado al signal envia SIGTERM al proceso indicado a
+traves de la syscall kill(2) y desarma-y-destruye el temporizador.
+
+El codigo 2 arma un temporizador por cada peticion que llega por teclado.
+Este, al vencimiento, invoca una funcion (como un thread). Dicha funcion recibe
+como argumento un puntero a una estructura similar al que recibia el handler
+del ejemplo anterior y envia SIGTERM y destruye el temporizador que ha vencido.
+
+El codigo 3 crea un thread de posix por cada peticion que recibe por teclado.
+Como argumento se le pasa una estructura con la informacion del tiempo de
+espera y el identificador del proceso a terminar. La funcion asociada al thread
+duerme en un sleep(3) el tiempo indicado y despues envia con kill(2) SIGTERM al
+proceso indicado.
+
